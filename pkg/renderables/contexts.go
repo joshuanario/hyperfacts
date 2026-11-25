@@ -1,6 +1,7 @@
 package renderables
 
 import (
+	"slices"
 	"sort"
 
 	myarcs "github.com/joshuanario/arcs"
@@ -216,6 +217,18 @@ func getRelevantContexts(schemedEntity string, h *hydratables.Hydratable,
 					if contextualSchemedEntity == schemedEntity {
 						contextualMembers, segmentTypedDomainTreesLocal, scenarioTypedDomainTreesLocal,
 							contextualLabelPacks := getContextualMembers(context, h)
+						isMissingAMember := len(contextualMembers) > 0 && slices.ContainsFunc(contextualMembers, func(m RelevantMember) bool {
+							if !slices.Contains(hrefs, m.Dimension.Href) {
+								return true
+							}
+							// if m.TypedDomain != nil && !slices.Contains(hrefs, m.TypedDomain.Href) {	//typed domain has a tendency to not be included in the presentation so this is commented out
+							// 	return true
+							// }
+							return m.ExplicitMember != nil && !slices.Contains(hrefs, m.ExplicitMember.Href)
+						})
+						if isMissingAMember {
+							continue
+						}
 						labelPacks = append(labelPacks, contextualLabelPacks...)
 						newItem := relevantContext{
 							ContextRef:   context.ID,
