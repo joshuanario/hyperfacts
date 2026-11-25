@@ -1,0 +1,302 @@
+package hydratables
+
+import (
+	"fmt"
+	"math"
+	"strconv"
+
+	"joshuanario.com/hyperfacts/pkg/attr"
+	"joshuanario.com/hyperfacts/pkg/serializables"
+)
+
+type DefinitionArc struct {
+	Order          float64
+	Arcrole        string
+	From           string
+	To             string
+	Closed         bool
+	Usable         bool
+	ContextElement string
+	TargetRole     string
+}
+
+type DefinitionLink struct {
+	Role           string
+	Locs           []Loc
+	DefinitionArcs []DefinitionArc
+}
+
+type DefinitionLinkbase struct {
+	FileName        string
+	RoleRefs        []RoleRef
+	DefinitionLinks []DefinitionLink
+}
+
+func hydrateDefinitionLinkbase(file *serializables.DefinitionLinkbaseFile, fileName string) (*DefinitionLinkbase, error) {
+	if len(fileName) <= 0 {
+		return nil, fmt.Errorf("empty file name")
+	}
+	if file == nil {
+		return nil, fmt.Errorf("empty file")
+	}
+	ret := DefinitionLinkbase{}
+	ret.FileName = fileName
+	ret.RoleRefs = hydrateDefinitionLinkbaseRoleRefs(file)
+	ret.DefinitionLinks = hydrateDefinitionLink(file)
+	return &ret, nil
+}
+
+func hydrateEmbeddedDefinitionLinkbase(file *serializables.SchemaFile, fileName string) (*DefinitionLinkbase, error) {
+	if len(fileName) <= 0 {
+		return nil, fmt.Errorf("empty file name")
+	}
+	if file == nil {
+		return nil, fmt.Errorf("empty file")
+	}
+	ret := DefinitionLinkbase{}
+	ret.FileName = fileName
+	ret.RoleRefs = hydrateEmbeddedLinkbaseRoleRefs(file)
+	ret.DefinitionLinks = hydrateEmbeddedDefinitionLink(file)
+	if len(ret.RoleRefs) <= 0 && len(ret.DefinitionLinks) <= 0 {
+		return nil, nil
+	}
+	return &ret, nil
+}
+
+func hydrateDefinitionLinkbaseRoleRefs(linkbaseFile *serializables.DefinitionLinkbaseFile) []RoleRef {
+	ret := make([]RoleRef, 0, len(linkbaseFile.RoleRef))
+	for _, roleRef := range linkbaseFile.RoleRef {
+		if roleRef.XMLName.Space != attr.LINK {
+			continue
+		}
+		roleURIAttr := attr.FindAttr(roleRef.XMLAttrs, "roleURI")
+		if roleURIAttr == nil || roleURIAttr.Value == "" {
+			continue
+		}
+		hrefAttr := attr.FindAttr(roleRef.XMLAttrs, "href")
+		if hrefAttr == nil || hrefAttr.Value == "" {
+			continue
+		}
+		if hrefAttr.Name.Space != attr.XLINK {
+			continue
+		}
+		newRoleRef := RoleRef{
+			RoleURI: roleURIAttr.Value,
+			Href:    hrefAttr.Value,
+		}
+		ret = append(ret, newRoleRef)
+	}
+	return ret
+}
+
+func hydrateEmbeddedDefinitionLink(schemaFile *serializables.SchemaFile) []DefinitionLink {
+	ret := make([]DefinitionLink, 0)
+	for _, annotation := range schemaFile.Annotation {
+		for _, appInfo := range annotation.Appinfo {
+			for _, linkbase := range appInfo.EmbeddedLinkbase {
+				for _, link := range linkbase.DefinitionLink {
+					typeAttr := attr.FindAttr(link.XMLAttrs, "type")
+					if typeAttr == nil || typeAttr.Name.Space != attr.XLINK || typeAttr.Value != "extended" {
+						continue
+					}
+					roleAttr := attr.FindAttr(link.XMLAttrs, "role")
+					if roleAttr == nil || roleAttr.Value == "" {
+						continue
+					}
+					newLink := DefinitionLink{}
+					newLink.Role = roleAttr.Value
+					newLink.Locs = make([]Loc, 0, len(link.Loc))
+					for _, loc := range link.Loc {
+						newLoc := Loc{}
+						ttypeAttr := attr.FindAttr(loc.XMLAttrs, "type")
+						if ttypeAttr == nil || ttypeAttr.Name.Space != attr.XLINK || ttypeAttr.Value != "locator" {
+							continue
+						}
+						labelAttr := attr.FindAttr(loc.XMLAttrs, "label")
+						if labelAttr == nil || labelAttr.Name.Space != attr.XLINK || labelAttr.Value == "" {
+							continue
+						}
+						hrefAttr := attr.FindAttr(loc.XMLAttrs, "href")
+						if hrefAttr == nil || hrefAttr.Value == "" {
+							continue
+						}
+						newLoc.Href = hrefAttr.Value
+						newLoc.Label = labelAttr.Value
+						newLink.Locs = append(newLink.Locs, newLoc)
+					}
+					newLink.DefinitionArcs = make([]DefinitionArc, 0, len(link.DefinitionArc))
+					for _, arc := range link.DefinitionArc {
+						newArc := DefinitionArc{}
+						ttypeAttr := attr.FindAttr(arc.XMLAttrs, "type")
+						if ttypeAttr == nil || ttypeAttr.Name.Space != attr.XLINK || ttypeAttr.Value != "arc" {
+							continue
+						}
+						orderAttr := attr.FindAttr(arc.XMLAttrs, "order")
+						if orderAttr == nil || orderAttr.Value == "" {
+							continue
+						}
+						arcroleAttr := attr.FindAttr(arc.XMLAttrs, "arcrole")
+						if arcroleAttr == nil || arcroleAttr.Name.Space != attr.XLINK || arcroleAttr.Value == "" {
+							continue
+						}
+						fromAttr := attr.FindAttr(arc.XMLAttrs, "from")
+						if fromAttr == nil || fromAttr.Name.Space != attr.XLINK || fromAttr.Value == "" {
+							continue
+						}
+						toAttr := attr.FindAttr(arc.XMLAttrs, "to")
+						if toAttr == nil || toAttr.Name.Space != attr.XLINK || toAttr.Value == "" {
+							continue
+						}
+						newArc.Arcrole = arcroleAttr.Value
+						order, err := strconv.ParseFloat(orderAttr.Value, 64)
+						if err != nil {
+							order = math.MaxFloat64
+						}
+						newArc.Order = order
+						newArc.From = fromAttr.Value
+						newArc.To = toAttr.Value
+						closedAttr := attr.FindAttr(arc.XMLAttrs, "closed")
+						if closedAttr != nil {
+							closed, err := strconv.ParseBool(closedAttr.Value)
+							if err == nil {
+								closed = false
+							}
+							newArc.Closed = closed
+						}
+						usableAttr := attr.FindAttr(arc.XMLAttrs, "usable")
+						if usableAttr != nil {
+							usable, err := strconv.ParseBool(usableAttr.Value)
+							if err == nil {
+								usable = true
+							}
+							newArc.Usable = usable
+						}
+						contextElementAttr := attr.FindAttr(arc.XMLAttrs, "contextElement")
+						if contextElementAttr != nil {
+							newArc.ContextElement = contextElementAttr.Value
+						}
+						targetRoleAttr := attr.FindAttr(arc.XMLAttrs, "targetRole")
+						if targetRoleAttr != nil {
+							newArc.TargetRole = targetRoleAttr.Value
+						}
+						newLink.DefinitionArcs = append(newLink.DefinitionArcs, newArc)
+					}
+					ret = append(ret, newLink)
+				}
+			}
+		}
+	}
+	return dedupDefinitionLink(ret)
+}
+
+func hydrateDefinitionLink(linkbaseFile *serializables.DefinitionLinkbaseFile) []DefinitionLink {
+	ret := make([]DefinitionLink, 0, len(linkbaseFile.DefinitionLink))
+	for _, link := range linkbaseFile.DefinitionLink {
+		typeAttr := attr.FindAttr(link.XMLAttrs, "type")
+		if typeAttr == nil || typeAttr.Name.Space != attr.XLINK || typeAttr.Value != "extended" {
+			continue
+		}
+		roleAttr := attr.FindAttr(link.XMLAttrs, "role")
+		if roleAttr == nil || roleAttr.Value == "" {
+			continue
+		}
+		newLink := DefinitionLink{}
+		newLink.Role = roleAttr.Value
+		newLink.Locs = make([]Loc, 0, len(link.Loc))
+		for _, loc := range link.Loc {
+			newLoc := Loc{}
+			ttypeAttr := attr.FindAttr(loc.XMLAttrs, "type")
+			if ttypeAttr == nil || ttypeAttr.Name.Space != attr.XLINK || ttypeAttr.Value != "locator" {
+				continue
+			}
+			labelAttr := attr.FindAttr(loc.XMLAttrs, "label")
+			if labelAttr == nil || labelAttr.Name.Space != attr.XLINK || labelAttr.Value == "" {
+				continue
+			}
+			hrefAttr := attr.FindAttr(loc.XMLAttrs, "href")
+			if hrefAttr == nil || hrefAttr.Value == "" {
+				continue
+			}
+			newLoc.Href = hrefAttr.Value
+			newLoc.Label = labelAttr.Value
+			newLink.Locs = append(newLink.Locs, newLoc)
+		}
+		newLink.DefinitionArcs = make([]DefinitionArc, 0, len(link.DefinitionArc))
+		for _, arc := range link.DefinitionArc {
+			newArc := DefinitionArc{}
+			ttypeAttr := attr.FindAttr(arc.XMLAttrs, "type")
+			if ttypeAttr == nil || ttypeAttr.Name.Space != attr.XLINK || ttypeAttr.Value != "arc" {
+				continue
+			}
+			orderAttr := attr.FindAttr(arc.XMLAttrs, "order")
+			if orderAttr == nil || orderAttr.Value == "" {
+				continue
+			}
+			arcroleAttr := attr.FindAttr(arc.XMLAttrs, "arcrole")
+			if arcroleAttr == nil || arcroleAttr.Name.Space != attr.XLINK || arcroleAttr.Value == "" {
+				continue
+			}
+			fromAttr := attr.FindAttr(arc.XMLAttrs, "from")
+			if fromAttr == nil || fromAttr.Name.Space != attr.XLINK || fromAttr.Value == "" {
+				continue
+			}
+			toAttr := attr.FindAttr(arc.XMLAttrs, "to")
+			if toAttr == nil || toAttr.Name.Space != attr.XLINK || toAttr.Value == "" {
+				continue
+			}
+			newArc.Arcrole = arcroleAttr.Value
+			order, err := strconv.ParseFloat(orderAttr.Value, 64)
+			if err != nil {
+				order = math.MaxFloat64
+			}
+			newArc.Order = order
+			newArc.From = fromAttr.Value
+			newArc.To = toAttr.Value
+			closedAttr := attr.FindAttr(arc.XMLAttrs, "closed")
+			if closedAttr != nil {
+				closed, err := strconv.ParseBool(closedAttr.Value)
+				if err == nil {
+					closed = false
+				}
+				newArc.Closed = closed
+			}
+			usableAttr := attr.FindAttr(arc.XMLAttrs, "usable")
+			if usableAttr != nil {
+				usable, err := strconv.ParseBool(usableAttr.Value)
+				if err == nil {
+					usable = true
+				}
+				newArc.Usable = usable
+			}
+			contextElementAttr := attr.FindAttr(arc.XMLAttrs, "contextElement")
+			if contextElementAttr != nil {
+				newArc.ContextElement = contextElementAttr.Value
+			}
+			targetRoleAttr := attr.FindAttr(arc.XMLAttrs, "targetRole")
+			if targetRoleAttr != nil {
+				newArc.TargetRole = targetRoleAttr.Value
+			}
+			newLink.DefinitionArcs = append(newLink.DefinitionArcs, newArc)
+		}
+		ret = append(ret, newLink)
+	}
+	return dedupDefinitionLink(ret)
+}
+
+func dedupDefinitionLink(links []DefinitionLink) []DefinitionLink {
+	occured := map[string]DefinitionLink{}
+	for _, link := range links {
+		if merged, found := occured[link.Role]; found {
+			merged.Locs = append(merged.Locs, link.Locs...)
+			merged.DefinitionArcs = append(merged.DefinitionArcs, link.DefinitionArcs...)
+			occured[link.Role] = merged
+		} else {
+			occured[link.Role] = link
+		}
+	}
+	ret := make([]DefinitionLink, 0)
+	for _, r := range occured {
+		ret = append(ret, r)
+	}
+	return ret
+}

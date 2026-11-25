@@ -1,0 +1,14 @@
+*
+*/
+.DS_Store
+!.gitignore
+!names.json
+!test_ix.zip
+!test_ix_extract.zip
+!test_485_ix.zip
+!test_image.zip
+!hello.zip
+!hello_ix.zip
+!high_precision.zip
+!/folders
+!/folders/**

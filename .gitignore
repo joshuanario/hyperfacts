@@ -32,3 +32,10 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+
+.DS_Store
+/cmd/hyperfacts/gts/**
+/cmd/hyperfacts/wd/**
+/wd/**
+/gts/**
