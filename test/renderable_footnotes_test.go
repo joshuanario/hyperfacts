@@ -44,11 +44,11 @@ func TestMarshalRenderable_Erroneous_Footnote(t *testing.T) {
 	if r.RelationshipSet.RoleURI != "http://nationalbeverage.com/20200502/role/statement-note-10-stockbased-compensation-summary-of-stock-option-activity-details" {
 		t.Fatalf("expected http://nationalbeverage.com/20200502/role/statement-note-10-stockbased-compensation-summary-of-stock-option-activity-details; outcome %s;\n", r.RelationshipSet.RoleURI)
 	}
-	if (*r.PGrid.FactualQuadrant[6][4])["Unlabelled"].Core != "11.14" {
-		t.Fatalf("expected 11.14; outcome %s;\n", (*r.PGrid.FactualQuadrant[6][4])["Unlabelled"].Core)
+	if (*r.PGrid.FactualQuadrant[6][2])["Unlabelled"].Core != "11.14" {
+		t.Fatalf("expected 11.14; outcome %s;\n", (*r.PGrid.FactualQuadrant[6][2])["Unlabelled"].Core)
 	}
-	if len(r.PGrid.FootnoteGrid[6][4]) != 1 {
-		t.Fatalf("expected 1 footnote link; outcome %d;\n", len(r.PGrid.FootnoteGrid[6][4]))
+	if len(r.PGrid.FootnoteGrid[6][2]) != 1 {
+		t.Fatalf("expected 1 footnote link; outcome %d;\n", len(r.PGrid.FootnoteGrid[6][2]))
 	}
 	if len(r.PGrid.Footnotes) != 1 {
 		t.Fatalf("expected 1 footnote; outcome %d;\n", len(r.PGrid.Footnotes))
