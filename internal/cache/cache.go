@@ -175,3 +175,32 @@ func hydratable(id string) (*hydratables.Hydratable, error) {
 	}()
 	return ret, err
 }
+
+func MarshalSuperRenderable(id string) ([]byte, error) {
+	h, err := hydratable(id)
+	if err != nil {
+		return nil, err
+	}
+	hash := fnv.New128a()
+	hash.Write([]byte(id + "/superrenderable"))
+	cachekey := hex.EncodeToString(hash.Sum([]byte{}))
+	lock.RLock()
+	if !dry {
+		if x, found := appCache.Get(cachekey); found {
+			ret := x.([]byte)
+			lock.RUnlock()
+			return ret, nil
+		}
+	}
+	lock.RUnlock()
+	byteArr, err := renderables.MarshalSuperRenderable(h)
+	go func() {
+		if dry {
+			return
+		}
+		lock.Lock()
+		defer lock.Unlock()
+		appCache.Set(cachekey, byteArr, gocache.DefaultExpiration)
+	}()
+	return byteArr, err
+}

@@ -16,6 +16,14 @@ type Catalog struct {
 }
 
 func MarshalCatalog(h *hydratables.Hydratable) ([]byte, error) {
+	catalog, err := GetCatalog(h)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(*catalog)
+}
+
+func GetCatalog(h *hydratables.Hydratable) (*Catalog, error) {
 	schemedEntities := sortedEntities(h)
 	rsets := sortedRelationshipSets(h)
 	subjects := make([]Subject, 0, len(schemedEntities))
@@ -44,12 +52,12 @@ func MarshalCatalog(h *hydratables.Hydratable) ([]byte, error) {
 			Entity: schemedEntity,
 		})
 	}
-	return json.Marshal(Catalog{
+	return &Catalog{
 		Subjects:         subjects,
 		RelationshipSets: rsets,
 		Networks:         networks,
 		Documents:        documents,
-	})
+	}, nil
 }
 
 func hash(schemedEntity string, linkroleURI string, title string) string {

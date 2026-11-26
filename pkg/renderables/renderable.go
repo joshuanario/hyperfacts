@@ -34,6 +34,14 @@ type Renderable struct {
 }
 
 func MarshalRenderable(slug string, h *hydratables.Hydratable) ([]byte, error) {
+	ret, err := GetRenderable(slug, h)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(ret)
+}
+
+func GetRenderable(slug string, h *hydratables.Hydratable) (*Renderable, error) {
 	schemedEntities := sortedEntities(h)
 	rsets := sortedRelationshipSets(h)
 	for _, schemedEntity := range schemedEntities {
@@ -120,7 +128,7 @@ func MarshalRenderable(slug string, h *hydratables.Hydratable) ([]byte, error) {
 				if err != nil {
 					return nil, err
 				}
-				return json.Marshal(ret)
+				return &ret, nil
 			}
 		}
 	}

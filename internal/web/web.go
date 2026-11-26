@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"net/http"
 	neturl "net/url"
 	"os"
@@ -149,7 +150,55 @@ func NewRouter() http.Handler {
 	if err != nil {
 		panic(err)
 	}
-	conceptnetworkbrowser := http.FileServer(http.Dir((filepath.Join(wd, "goldlord-midas"))))
-	r.PathPrefix("/").Handler(http.StripPrefix("/", conceptnetworkbrowser))
+	browserDir := filepath.Join(wd, "king-of-roses")
+	// Register "/" before the catch-all file server; mux uses the first match.
+	r.Path("/").HandlerFunc(OfflineConceptNetworkBrowser(browserDir)).Methods("GET")
 	return r
+}
+
+func OfflineConceptNetworkBrowser(browserDir string) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Error: incorrect verb, "+r.Method, http.StatusInternalServerError)
+			return
+		}
+		htmlBytes, err := os.ReadFile(filepath.Join(browserDir, "index.html"))
+		if err != nil {
+			http.Error(w, "Error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		id := r.URL.Query().Get("id")
+		if len(id) > 0 {
+			data, err := cache.MarshalSuperRenderable(id)
+			if err != nil {
+				http.Error(w, "Error: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			htmlBytes = injectData(htmlBytes, data)
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write(htmlBytes)
+	}
+}
+
+// injectData inserts a script defining globalThis.SUPER_RENDERABLE just before </head>
+// (or at the start of the document if there is no </head>). data must come
+// from json.Marshal, which escapes <, > and & so it cannot close the
+// script tag early.
+func injectData(htmlBytes, data []byte) []byte {
+	var script bytes.Buffer
+	script.WriteString("<script>\nglobalThis.SUPER_RENDERABLE = ")
+	script.Write(data)
+	script.WriteString(";\n</script>\n")
+
+	idx := bytes.Index(htmlBytes, []byte("</head>"))
+	if idx < 0 {
+		idx = 0
+	}
+	out := make([]byte, 0, len(htmlBytes)+script.Len())
+	out = append(out, htmlBytes[:idx]...)
+	out = append(out, script.Bytes()...)
+	out = append(out, htmlBytes[idx:]...)
+	return out
 }
